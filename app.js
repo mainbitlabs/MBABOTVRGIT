@@ -5,6 +5,9 @@ A simple echo bot for the Microsoft Bot Framework.
 var restify = require('restify');
 var builder = require('botbuilder');
 var botbuilder_azure = require("botbuilder-azure");
+var config = require('./config');
+var azurest = require('azure-storage');
+var tableService = azurest.createTableService( config.storageA, config.accessK );
 
 // Setup Restify Server
 var server = restify.createServer();
@@ -36,22 +39,84 @@ var tableStorage = new botbuilder_azure.AzureBotStorage({ gzipData: false }, azu
 var bot = new builder.UniversalBot(connector);
 bot.set('storage', tableStorage);
 
+
+var Choice = {
+    Viaticos: 'Solicitar Viáticos',
+    Refacciones: 'Solicitar Refacciones',
+    Ambos: 'Solicitar Ambos'
+};
+// El díalogo principal inicia aquí
 bot.dialog('/', [
-    function (session) {
-        builder.Prompts.text(session, "Hello from Github... What's your name?");
+    
+    function (session, results, next) {
+        // Primer diálogo    
+        builder.Prompts.text(session, '¿Cuál es el número de ticket que deseas revisar?')
     },
     function (session, results) {
-        session.userData.name = results.response;
-        builder.Prompts.number(session, "Hi " + results.response + ", How many years have you been coding?"); 
+        // Segundo diálogo
+        session.dialogData.ticket = results.response;
+        builder.Prompts.text(session, '¿Cuál es el nombre del asociado?')
     },
     function (session, results) {
-        session.userData.coding = results.response;
-        builder.Prompts.choice(session, "What language do you code Node using?", ["JavaScript", "CoffeeScript", "TypeScript"]);
+        session.dialogData.asociado = results.response;
+        // Tercer diálogo
+        tableService.retrieveEntity(config.table1, session.dialogData.asociado, session.dialogData.ticket, function(error, result, response) {
+            // var unlock = result.Status._;
+            if(!error ) {
+    
+                session.send(`Hola ${session.dialogData.asociado}. Esta es la información del Ticket: \n **Número de Ticket: ${session.dialogData.ticket} \n Asociado: ${result.PartitionKey._}  \n Proyecto: ${result.PROYECTO._} \n Descripción: ${result.DESCRIPCION._}.**`);
+                builder.Prompts.choice(session, 'Hola ¿deseas solicitar alguna de las siguientes opciones?', [Choice.Viaticos, Choice.Refacciones, Choice.Ambos], { listStyle: builder.ListStyle.button });
+            }
+            else{
+                session.endDialog("**Error: Los datos son incorrectos, intentalo nuevamente.**");
+            }
+        });
     },
     function (session, results) {
-        session.userData.language = results.response.entity;
-        session.send("Got it... " + session.userData.name + 
-                    " you've been programming for " + session.userData.coding + 
-                    " years and use " + session.userData.language + ".");
+        var selection = results.response.entity;
+        switch (selection) {
+            // Viaticos
+            case Choice.Viaticos:
+            // return session.beginDialog('viaticos');
+            tableService.retrieveEntity(config.table1, session.dialogData.asociado, session.dialogData.ticket, function(error, result, response) {
+                // var unlock = result.Status._;
+                if(!error ) {
+        
+                    session.endDialog(`Estos son los viáticos preaprobados para el ticket ${result.RowKey._}: \n **Viáticos: $ ${result.VIATICOS._}**`);
+                }
+                else{
+                    session.endDialog("**Error:**");
+                }
+            });
+            break;
+            // Viaticos
+            case Choice.Refacciones:
+            // return session.beginDialog('viaticos');
+            tableService.retrieveEntity(config.table1, session.dialogData.asociado, session.dialogData.ticket, function(error, result, response) {
+                // var unlock = result.Status._;
+                if(!error ) {
+        
+                    session.endDialog(`Estos son los gastos para refacciones preaprobados para el ticket ${result.RowKey._}: \n **Refacciones: $ ${result.REFACCION._}**`);
+                }
+                else{
+                    session.endDialog("**Error:**");
+                }
+            });
+            break;
+            // Refacciones
+            case Choice.Ambos:
+                tableService.retrieveEntity(config.table1, session.dialogData.asociado, session.dialogData.ticket, function(error, result, response) {
+                    if(!error ) {
+                        var viaticos= result.VIATICOS._;
+                        var refacciones= result.REFACCION._;
+                        var total = parseInt(viaticos) + parseInt(refacciones);
+                        session.endDialog(`Estos son los gastos preaprobados para viáticos y refacciones para el ticket ${result.RowKey._}: \n **Viáticos: $${result.VIATICOS._}** \n **Refacciones: $${result.REFACCION._}** \n **Total $${total}**`);
+                    }
+                    else{
+                        session.endDialog("**Error:**");
+                    }
+                });            break;
+            }
+        
     }
 ]);
