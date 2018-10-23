@@ -45,6 +45,11 @@ var Choice = {
     Refacciones: 'Solicitar Refacciones',
     Ambos: 'Solicitar Ambos'
 };
+var Flujo = {
+    Si: 'Si',
+    No: 'No'
+};
+
 // El díalogo principal inicia aquí
 bot.dialog('/', [
     
@@ -81,28 +86,28 @@ bot.dialog('/', [
             tableService.retrieveEntity(config.table1, session.dialogData.asociado, session.dialogData.ticket, function(error, result, response) {
                 // var unlock = result.Status._;
                 if(!error ) {
-        
-                    session.endDialog(`Estos son los viáticos preaprobados para el ticket ${result.RowKey._}: \n **Viáticos: $ ${result.VIATICOS._}**`);
+                    session.send(`Estos son los viáticos preaprobados para el ticket ${result.RowKey._}: \n **Viáticos: $ ${result.VIATICOS._}**`);
+                    builder.Prompts.choice(session, '¿Estás de acuerdo?', [Flujo.Si, Flujo.No], { listStyle: builder.ListStyle.button });
                 }
                 else{
                     session.endDialog("**Error:**");
                 }
             });
-            break;
+                break;
             // Viaticos
             case Choice.Refacciones:
             // return session.beginDialog('viaticos');
             tableService.retrieveEntity(config.table1, session.dialogData.asociado, session.dialogData.ticket, function(error, result, response) {
                 // var unlock = result.Status._;
                 if(!error ) {
-        
-                    session.endDialog(`Estos son los gastos para refacciones preaprobados para el ticket ${result.RowKey._}: \n **Refacciones: $ ${result.REFACCION._}**`);
+                    session.send(`Estos son los gastos para refacciones preaprobados para el ticket ${result.RowKey._}: \n **Refacciones: $ ${result.REFACCION._}**`);
+                    builder.Prompts.choice(session, '¿Estás de acuerdo?', [Flujo.Si, Flujo.No], { listStyle: builder.ListStyle.button });
                 }
                 else{
                     session.endDialog("**Error:**");
                 }
             });
-            break;
+                break;
             // Refacciones
             case Choice.Ambos:
                 tableService.retrieveEntity(config.table1, session.dialogData.asociado, session.dialogData.ticket, function(error, result, response) {
@@ -110,7 +115,9 @@ bot.dialog('/', [
                         var viaticos= result.VIATICOS._;
                         var refacciones= result.REFACCION._;
                         var total = parseInt(viaticos) + parseInt(refacciones);
-                        session.endDialog(`Estos son los gastos preaprobados para viáticos y refacciones para el ticket ${result.RowKey._}: \n **Viáticos: $${result.VIATICOS._}** \n **Refacciones: $${result.REFACCION._}** \n **Total $${total}**`);
+                        session.send(`Estos son los gastos preaprobados para viáticos y refacciones para el ticket ${result.RowKey._}: \n **Viáticos: $${result.VIATICOS._}** \n **Refacciones: $${result.REFACCION._}** \n **Total $${total}**`);
+                        builder.Prompts.choice(session, '¿Estás de acuerdo?', [Flujo.Si, Flujo.No], { listStyle: builder.ListStyle.button });
+
                     }
                     else{
                         session.endDialog("**Error:**");
@@ -118,5 +125,33 @@ bot.dialog('/', [
                 });            break;
             }
         
+    },
+    function (session, results) {
+        var choice2 = results.response.entity;
+    switch (choice2) {
+        case Flujo.No:
+            builder.Prompts.text(session, '¿Cuál es la cantidad que deseas solicitar?')
+            break;
+        case Flujo.Si:
+        session.endDialog('**Se te notificará por correo la aprobación de está solicitud. \n Saludos.**');
+            break;
+}
+       
+    },
+    function (session, results) {
+        session.dialogData.cantidad = results.response; 
+        var myrequest = {
+            PartitionKey : {'_': session.dialogData.asociado, '$':'Edm.String'},
+            RowKey: {'_': session.dialogData.ticket, '$':'Edm.String'},
+            CantidadSolicitada: {'_': session.dialogData.cantidad, '$':'Edm.String'}
+        };
+        // Función de guardar solicitud de cantidad en tabla 2
+        tableService.insertOrReplaceEntity (config.table2, myrequest, function(error) {
+        if(!error) {
+            console.log('Entity tabla2 inserted');   // Entity inserted
+        }
+        }); 
+        session.endDialog(`**En este momento se iniciará un flujo de aprobación por la cantidad de ${session.dialogData.cantidad}, se notificará por correo la respuesta de está solicitud. \n Saludos.**`);
+
     }
 ]);
