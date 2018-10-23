@@ -69,7 +69,7 @@ bot.dialog('/', [
             // var unlock = result.Status._;
             if(!error ) {
     
-                session.send(`Hola ${session.dialogData.asociado}. Esta es la información del Ticket: \n **Número de Ticket: ${session.dialogData.ticket} \n Asociado: ${result.PartitionKey._}  \n Proyecto: ${result.PROYECTO._} \n Descripción: ${result.DESCRIPCION._}.**`);
+                session.send(`Hola ${session.dialogData.asociado}. Esta es la información del Ticket: \n **Número de Ticket: ${session.dialogData.ticket} \n Asociado: ${result.PartitionKey._}  \n Proyecto: ${result.PROYECTO._}  \n Localidad: ${result.ESTADO._} \n Descripción: ${result.DESCRIPCION._}.**`);
                 builder.Prompts.choice(session, 'Hola ¿deseas solicitar alguna de las siguientes opciones?', [Choice.Viaticos, Choice.Refacciones, Choice.Ambos], { listStyle: builder.ListStyle.button });
             }
             else{
