@@ -41,9 +41,9 @@ bot.set('storage', tableStorage);
 
 
 var Choice = {
-    Viaticos: 'Solicitar Viáticos',
-    Refacciones: 'Solicitar Refacciones',
-    Ambos: 'Solicitar Ambos'
+    Viaticos: 'Viáticos',
+    Refacciones: 'Refacciones',
+    Ambos: 'Ambos'
 };
 var Flujo = {
     Si: 'Si',
