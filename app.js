@@ -53,9 +53,13 @@ var Flujo = {
 // El díalogo principal inicia aquí
 bot.dialog('/', [
     
-    function (session, results, next) {
+    function (session) {
         // Primer diálogo    
-        builder.Prompts.text(session, '¿Cuál es el número de ticket que deseas revisar?')
+        session.send(`**Importante: este Bot tiene un ciclo de vida de 5 minutos**, te recomendamos concluir la actividad antes de este periodo. \n **Sugerencia:** Si por alguna razón necesitas cancelar la solicitud introduce el texto **cancelar.**`);
+        time = setTimeout(() => {
+            session.endConversation(`**Ha transcurrido el tiempo estimado para completar esta actividad.** \n **Intentalo nuevamente**`);
+        }, 300000);
+        builder.Prompts.text(session, '¿Cuál es el número de ticket que deseas revisar?');
     },
     function (session, results) {
         // Segundo diálogo
@@ -155,3 +159,13 @@ bot.dialog('/', [
 
     }
 ]);
+// Diálogo de cancelación
+bot.dialog('cancel',
+    function (session) {
+        clearTimeout(time);
+        session.endDialog('**Has cancelado manualmente este proceso, puedes volver a iniciar desde el principio.**');
+        // session.beginDialog('/');
+    }
+).triggerAction(
+    {matches: /^cancelar/gi}
+);
