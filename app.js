@@ -7,6 +7,7 @@ var builder = require('botbuilder');
 var botbuilder_azure = require("botbuilder-azure");
 var config = require('./config');
 var azurest = require('azure-storage');
+var axios = require('axios');
 var tableService = azurest.createTableService( config.storageA, config.accessK );
 
 // Setup Restify Server
@@ -59,38 +60,43 @@ bot.dialog('/', [
         time = setTimeout(() => {
             session.endConversation(`**Ha transcurrido el tiempo estimado para completar esta actividad.** \n **Intentalo nuevamente**`);
         }, 300000);
-        builder.Prompts.text(session, '¿Cuál es el número de ticket que deseas revisar?');
+        builder.Prompts.text(session, '¿Cuál es el número de ticket de **ServiceNow** que deseas revisar?');
     },
     function (session, results) {
-        // Segundo diálogo
         session.dialogData.ticket = results.response;
-        builder.Prompts.text(session, '¿Cuál es el nombre del asociado?')
-    },
-    function (session, results) {
-        session.dialogData.asociado = results.response;
-        // Tercer diálogo
-        tableService.retrieveEntity(config.table1, session.dialogData.asociado, session.dialogData.ticket, function(error, result, response) {
-            // var unlock = result.Status._;
-            if(!error ) {
-    
-                session.send(`Hola ${session.dialogData.asociado}. Esta es la información del Ticket: \n **Número de Ticket: ${session.dialogData.ticket} \n Asociado: ${result.PartitionKey._}  \n Proyecto: ${result.PROYECTO._}  \n Localidad: ${result.ESTADO._} \n Descripción: ${result.DESCRIPCION._}.**`);
-                builder.Prompts.choice(session, 'Hola ¿deseas solicitar alguna de las siguientes opciones?', [Choice.Viaticos, Choice.Refacciones, Choice.Ambos], { listStyle: builder.ListStyle.button });
-            }
-            else{
-                session.endDialog("**Error: Los datos son incorrectos, intentalo nuevamente.**");
-            }
+
+        axios.get(
+
+            'https://mainbitdev1.service-now.com/api/now/v2/table/incident?number='+session.dialogData.ticket,
+            {headers:{"Accept":"application/json","Content-Type":"application/json","Authorization": ("Basic " + new Buffer("mjimenez@mainbit.com.mx:Mainbit.1").toString('base64'))}}
+        
+        ).then((data)=>{
+        
+            var result = data.data.result[0];
+        
+            //console.log(" Título:", data.data.result );
+            session.send(` Título: **${result.subcategory}** \n Descripción: **${result.short_description}** \n Creado por: **${result.sys_created_by}** \n Creado el: **${result.sys_created_on}** \n Última actualización: **${result.sys_updated_on}** \n Resuelto el: **${result.resolved_at}**`)
+            builder.Prompts.choice(session, 'Hola ¿deseas solicitar alguna de las siguientes opciones?', [Choice.Viaticos, Choice.Refacciones, Choice.Ambos], { listStyle: builder.ListStyle.button });
+
+        }).catch((e)=>{
+        
+            console.log("error",e.toString());
+            session.endDialog("**Error: Los datos son incorrectos, intentalo nuevamente.**");
+
         });
+       
     },
+    
     function (session, results) {
         var selection = results.response.entity;
         switch (selection) {
             // Viaticos
             case Choice.Viaticos:
             // return session.beginDialog('viaticos');
-            tableService.retrieveEntity(config.table1, session.dialogData.asociado, session.dialogData.ticket, function(error, result, response) {
+            tableService.retrieveEntity(config.table1, 'Spark', '1234', function(error, result, response) {
                 // var unlock = result.Status._;
                 if(!error ) {
-                    session.send(`Estos son los viáticos preaprobados para el ticket ${result.RowKey._}: \n **Viáticos: $ ${result.VIATICOS._}**`);
+                    session.send(`Estos son los viáticos preaprobados para el ticket ${session.dialogData.ticket}: \n **Viáticos: $ ${result.VIATICOS._}**`);
                     builder.Prompts.choice(session, '¿Estás de acuerdo?', [Flujo.Si, Flujo.No], { listStyle: builder.ListStyle.button });
                 }
                 else{
@@ -101,7 +107,7 @@ bot.dialog('/', [
             // Viaticos
             case Choice.Refacciones:
             // return session.beginDialog('viaticos');
-            tableService.retrieveEntity(config.table1, session.dialogData.asociado, session.dialogData.ticket, function(error, result, response) {
+            tableService.retrieveEntity(config.table1, 'Spark', '1234', function(error, result, response) {
                 // var unlock = result.Status._;
                 if(!error ) {
                     session.send(`Estos son los gastos para refacciones preaprobados para el ticket ${result.RowKey._}: \n **Refacciones: $ ${result.REFACCION._}**`);
@@ -114,7 +120,7 @@ bot.dialog('/', [
                 break;
             // Refacciones
             case Choice.Ambos:
-                tableService.retrieveEntity(config.table1, session.dialogData.asociado, session.dialogData.ticket, function(error, result, response) {
+                tableService.retrieveEntity(config.table1, 'Spark', '1234', function(error, result, response) {
                     if(!error ) {
                         var viaticos= result.VIATICOS._;
                         var refacciones= result.REFACCION._;
@@ -145,8 +151,8 @@ bot.dialog('/', [
     function (session, results) {
         session.dialogData.cantidad = results.response; 
         var myrequest = {
-            PartitionKey : {'_': session.dialogData.asociado, '$':'Edm.String'},
-            RowKey: {'_': session.dialogData.ticket, '$':'Edm.String'},
+            PartitionKey : {'_': 'Spark', '$':'Edm.String'},
+            RowKey: {'_': '1234', '$':'Edm.String'},
             CantidadSolicitada: {'_': session.dialogData.cantidad, '$':'Edm.String'}
         };
         // Función de guardar solicitud de cantidad en tabla 2

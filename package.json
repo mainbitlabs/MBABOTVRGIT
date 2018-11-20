@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "axios": "^0.18.0",
     "azure-storage": "^2.10.2",
     "botbuilder": "^3.13.1",
     "botbuilder-azure": "^3.0.4",
