@@ -13,10 +13,11 @@
     "azure-storage": "^2.10.2",
     "botbuilder": "^3.13.1",
     "botbuilder-azure": "^3.0.4",
-    "restify": "^5.0.0"
+    "restify": "^5.0.0",
+    "sf": "^0.1.9"
   },
   "devDependencies": {
-    "request": "^2.81.0",
+    "request": "^2.88.0",
     "zip-folder": "^1.0.0"
   }
 }

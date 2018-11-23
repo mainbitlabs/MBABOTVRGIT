@@ -8,6 +8,7 @@ var botbuilder_azure = require("botbuilder-azure");
 var config = require('./config');
 var azurest = require('azure-storage');
 var axios = require('axios');
+var request = require('request');
 var tableService = azurest.createTableService( config.storageA, config.accessK );
 
 // Setup Restify Server
@@ -53,18 +54,16 @@ var Flujo = {
 
 // El díalogo principal inicia aquí
 bot.dialog('/', [
-    
-    function (session) {
+    function (session, next) {
         // Primer diálogo    
         session.send(`**Importante: este Bot tiene un ciclo de vida de 5 minutos**, te recomendamos concluir la actividad antes de este periodo. \n **Sugerencia:** Si por alguna razón necesitas cancelar la solicitud introduce el texto **cancelar.**`);
         time = setTimeout(() => {
-            session.endConversation(`**Ha transcurrido el tiempo estimado para completar esta actividad.** \n **Intentalo nuevamente**`);
+        session.endConversation(`**Ha transcurrido el tiempo estimado para completar esta actividad.** \n **Intentalo nuevamente**`);
         }, 300000);
-        builder.Prompts.text(session, '¿Cuál es el número de ticket de **ServiceNow** que deseas revisar?');
-    },
+        builder.Prompts.text(session, '¿Cuál es el número de ticket de **ServiceNow** que deseas revisar?');    },
     function (session, results) {
         session.dialogData.ticket = results.response;
-
+        session.dialogData.sysID = '';
         axios.get(
 
             'https://mainbitdev1.service-now.com/api/now/v2/table/incident?number='+session.dialogData.ticket,
@@ -73,98 +72,53 @@ bot.dialog('/', [
         ).then((data)=>{
         
             var result = data.data.result[0];
-        
+            session.dialogData.sysID = data.data.result[0].sys_id;
             //console.log(" Título:", data.data.result );
+            session.send(session.dialogData.sysID);
             session.send(` Título: **${result.subcategory}** \n Descripción: **${result.short_description}** \n Creado por: **${result.sys_created_by}** \n Creado el: **${result.sys_created_on}** \n Última actualización: **${result.sys_updated_on}** \n Resuelto el: **${result.resolved_at}**`)
-            builder.Prompts.choice(session, 'Hola ¿deseas solicitar alguna de las siguientes opciones?', [Choice.Viaticos, Choice.Refacciones, Choice.Ambos], { listStyle: builder.ListStyle.button });
-
+            builder.Prompts.attachment(session, 'Adjunta una foto aquí')
+        
         }).catch((e)=>{
         
             console.log("error",e.toString());
-            session.endDialog("**Error: Los datos son incorrectos, intentalo nuevamente.**");
-
+        
         });
        
     },
-    
     function (session, results) {
-        var selection = results.response.entity;
-        switch (selection) {
-            // Viaticos
-            case Choice.Viaticos:
-            // return session.beginDialog('viaticos');
-            tableService.retrieveEntity(config.table1, 'Spark', '1234', function(error, result, response) {
-                // var unlock = result.Status._;
-                if(!error ) {
-                    session.send(`Estos son los viáticos preaprobados para el ticket ${session.dialogData.ticket}: \n **Viáticos: $ ${result.VIATICOS._}**`);
-                    builder.Prompts.choice(session, '¿Estás de acuerdo?', [Flujo.Si, Flujo.No], { listStyle: builder.ListStyle.button });
-                }
-                else{
-                    session.endDialog("**Error:**");
-                }
-            });
-                break;
-            // Viaticos
-            case Choice.Refacciones:
-            // return session.beginDialog('viaticos');
-            tableService.retrieveEntity(config.table1, 'Spark', '1234', function(error, result, response) {
-                // var unlock = result.Status._;
-                if(!error ) {
-                    session.send(`Estos son los gastos para refacciones preaprobados para el ticket ${result.RowKey._}: \n **Refacciones: $ ${result.REFACCION._}**`);
-                    builder.Prompts.choice(session, '¿Estás de acuerdo?', [Flujo.Si, Flujo.No], { listStyle: builder.ListStyle.button });
-                }
-                else{
-                    session.endDialog("**Error:**");
-                }
-            });
-                break;
-            // Refacciones
-            case Choice.Ambos:
-                tableService.retrieveEntity(config.table1, 'Spark', '1234', function(error, result, response) {
-                    if(!error ) {
-                        var viaticos= result.VIATICOS._;
-                        var refacciones= result.REFACCION._;
-                        var total = parseInt(viaticos) + parseInt(refacciones);
-                        session.send(`Estos son los gastos preaprobados para viáticos y refacciones para el ticket ${result.RowKey._}: \n **Viáticos: $${result.VIATICOS._}** \n **Refacciones: $${result.REFACCION._}** \n **Total $${total}**`);
-                        builder.Prompts.choice(session, '¿Estás de acuerdo?', [Flujo.Si, Flujo.No], { listStyle: builder.ListStyle.button });
+        var msg = session.message;
+        if (msg.attachments && msg.attachments.length > 0) {
+         // Echo back attachment
+         var attachment = msg.attachments[0];
+            session.send({
+                "attachments": [
+                  {
+                    "contentType": attachment.contentType,
+                    "contentUrl": attachment.contentUrl,
+                    "name": attachment.name
+                  }
+                ],});
+                var file = attachment.contentUrl;
+console.log(attachment.contentUrl);
 
-                    }
-                    else{
-                        session.endDialog("**Error:**");
-                    }
-                });            break;
-            }
-        
-    },
-    function (session, results) {
-        var choice2 = results.response.entity;
-    switch (choice2) {
-        case Flujo.No:
-            builder.Prompts.text(session, '¿Cuál es la cantidad que deseas solicitar?')
-            break;
-        case Flujo.Si:
-        session.endDialog('**Se te notificará por correo la aprobación de está solicitud. \n Saludos.**');
-            break;
-}
-       
-    },
-    function (session, results) {
-        session.dialogData.cantidad = results.response; 
-        var myrequest = {
-            PartitionKey : {'_': 'Spark', '$':'Edm.String'},
-            RowKey: {'_': '1234', '$':'Edm.String'},
-            CantidadSolicitada: {'_': session.dialogData.cantidad, '$':'Edm.String'}
-        };
-        // Función de guardar solicitud de cantidad en tabla 2
-        tableService.insertOrReplaceEntity (config.table2, myrequest, function(error) {
-        if(!error) {
-            console.log('Entity tabla2 inserted');   // Entity inserted
+                var data = request(file);
+        axios.post(
+            'https://mainbitdev1.service-now.com/api/now/attachment/file?table_name=incident&table_sys_id='+session.dialogData.sysID+'&file_name='+attachment.name,
+            data,
+            {headers:{"Accept":"application/json","Content-Type":"image/png","Authorization": ("Basic " + new Buffer("mjimenez@mainbit.com.mx:Mainbit.1").toString('base64'))}},
+        ).then((data)=>{
+        console.log('done'+ data.data.result);
+        }).catch((error)=>{
+            console.log("error",error.toString());
+        });
+         } else {
+            // Echo back users text
+            session.send("You said: %s", session.message.text);
         }
-        }); 
-        session.endDialog(`**En este momento se iniciará un flujo de aprobación por la cantidad de ${session.dialogData.cantidad}, se notificará por correo la respuesta de está solicitud. \n Saludos.**`);
 
     }
 ]);
+
 // Diálogo de cancelación
 bot.dialog('cancel',
     function (session) {
